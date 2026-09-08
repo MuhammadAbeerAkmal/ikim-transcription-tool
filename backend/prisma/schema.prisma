@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum ItemStatus {
+  UNMATCHED
   PENDING
   IN_PROGRESS
   COMPLETED
@@ -41,13 +42,14 @@ model AudioFile {
 
 model Item {
   id          String   @id @default(cuid())
-  audioFileId String   @unique
-  audioFile   AudioFile @relation(fields: [audioFileId], references: [id])
+  audioFileId String?  @unique
+  audioFile   AudioFile? @relation(fields: [audioFileId], references: [id])
 
-  originalTranscript   String
-  correctedTranscript  String
+  originalTranscript    String?
+  correctedTranscript   String?
+  transcriptSourcePath  String?
 
-  status     ItemStatus @default(PENDING)
+  status     ItemStatus @default(UNMATCHED)
   annotator  String?
 
   speechRateComputed      Float?
