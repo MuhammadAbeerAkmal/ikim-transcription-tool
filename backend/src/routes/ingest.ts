@@ -1,0 +1,146 @@
+import { Router } from "express";
+import { z } from "zod";
+import { uploadAudio } from "../middleware/upload.js";
+import { prisma } from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
+
+import {
+  extractMetadata,
+  estimateDistance,
+} from "../services/audioMetadata.js";
+import { determineInitialStatus } from "../services/itemStatus.js";
+import {
+  validateTranscriptRows,
+  pairTranscriptsToAudio,
+} from "../services/pairing.js";
+
+export const ingestRouter = Router();
+
+ingestRouter.post("/audio", uploadAudio.array("files"), async (req, res) => {
+  const files = req.files as Express.Multer.File[];
+  const created = [];
+
+  for (const file of files) {
+    const metadata = await extractMetadata(file.path);
+    const distanceEstimateComputed = await estimateDistance(file.path);
+
+    const audioFile = await prisma.audioFile.create({
+      data: {
+        filename: file.originalname,
+        path: file.path,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        durationSec: metadata.durationSec,
+        sampleRate: metadata.sampleRate,
+        channels: metadata.channels,
+        bitDepth: metadata.bitDepth,
+        metadata: (metadata.metadata ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
+      },
+    });
+
+    const item = await prisma.item.create({
+      data: {
+        audioFileId: audioFile.id,
+        status: determineInitialStatus(metadata.durationSec),
+        distanceEstimateComputed,
+      },
+    });
+
+    created.push({ audioFile, item });
+  }
+
+  res.status(201).json({ created });
+});
+
+const transcriptsRequestSchema = z.union([
+  z.array(z.unknown()),
+  z.object({ path: z.string(), label: z.string() }),
+]);
+
+ingestRouter.post("/transcripts", async (req, res) => {
+  const parsed = transcriptsRequestSchema.parse(req.body);
+  const rows = Array.isArray(parsed) ? parsed : [parsed];
+
+  const { validRows, errors } = validateTranscriptRows(rows);
+
+  const openAudioItems = await prisma.item.findMany({
+    where: { audioFileId: { not: null }, originalTranscript: null },
+    include: { audioFile: true },
+  });
+  const audioFilenames = openAudioItems.map((i) => i.audioFile!.filename);
+
+  const { matched, unmatchedAudio, unmatchedTranscripts } =
+    pairTranscriptsToAudio(validRows, audioFilenames);
+
+  const updated = [];
+  for (const pair of matched) {
+    const item = openAudioItems.find(
+      (i) => i.audioFile!.filename === pair.audioFilename,
+    )!;
+    updated.push(
+      await prisma.item.update({
+        where: { id: item.id },
+        data: {
+          originalTranscript: pair.label,
+          correctedTranscript: pair.label,
+          transcriptSourcePath: pair.transcriptPath,
+          status: determineInitialStatus(item.audioFile!.durationSec),
+        },
+      }),
+    );
+  }
+
+  const createdUnmatched = [];
+  for (const row of unmatchedTranscripts) {
+    createdUnmatched.push(
+      await prisma.item.create({
+        data: {
+          originalTranscript: row.label,
+          correctedTranscript: row.label,
+          transcriptSourcePath: row.path,
+          status: "UNMATCHED",
+        },
+      }),
+    );
+  }
+
+  res.status(201).json({
+    matched: updated,
+    unmatchedAudio,
+    unmatchedTranscripts: createdUnmatched,
+    rowErrors: errors,
+  });
+});
+
+const manualPairSchema = z.object({
+  audioItemId: z.string(),
+  transcriptItemId: z.string(),
+});
+
+ingestRouter.post("/pairing/manual", async (req, res) => {
+  const { audioItemId, transcriptItemId } = manualPairSchema.parse(req.body);
+
+  const [audioItem, transcriptItem] = await Promise.all([
+    prisma.item.findUniqueOrThrow({
+      where: { id: audioItemId },
+      include: { audioFile: true },
+    }),
+    prisma.item.findUniqueOrThrow({ where: { id: transcriptItemId } }),
+  ]);
+
+  const merged = await prisma.item.update({
+    where: { id: audioItem.id },
+    data: {
+      originalTranscript: transcriptItem.originalTranscript,
+      correctedTranscript: transcriptItem.correctedTranscript,
+      transcriptSourcePath: transcriptItem.transcriptSourcePath,
+      status: determineInitialStatus(audioItem.audioFile!.durationSec),
+    },
+  });
+
+  await prisma.item.delete({ where: { id: transcriptItem.id } });
+
+  res.json({ item: merged });
+});

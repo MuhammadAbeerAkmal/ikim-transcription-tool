@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { ingestRouter } from "./routes/ingest.js";
 
 export const app = express();
 
@@ -11,6 +12,6 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// routes will be mounted here
+app.use("/api", ingestRouter);
 
 app.use(errorHandler);
