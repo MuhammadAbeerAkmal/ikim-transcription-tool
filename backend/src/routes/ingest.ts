@@ -18,6 +18,7 @@ import {
   validateTranscriptRows,
   pairTranscriptsToAudio,
 } from "../services/pairing.js";
+import { computeSpeechRate } from "../services/recordingConditions.js";
 
 export const ingestRouter = Router();
 
@@ -106,6 +107,10 @@ ingestRouter.post("/transcripts", async (req, res) => {
           correctedTranscript: pair.label,
           transcriptSourcePath: pair.transcriptPath,
           status: determineInitialStatus(item.audioFile!.durationSec),
+          speechRateComputed: computeSpeechRate(
+            pair.label,
+            item.audioFile!.durationSec,
+          ),
         },
       }),
     );
@@ -167,6 +172,10 @@ ingestRouter.post("/pairing/manual", async (req, res) => {
       correctedTranscript: transcriptItem.correctedTranscript,
       transcriptSourcePath: transcriptItem.transcriptSourcePath,
       status: determineInitialStatus(audioItem.audioFile!.durationSec),
+      speechRateComputed: computeSpeechRate(
+        transcriptItem.originalTranscript,
+        audioItem.audioFile!.durationSec,
+      ),
     },
   });
 
