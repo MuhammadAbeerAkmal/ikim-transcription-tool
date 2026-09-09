@@ -62,6 +62,7 @@ function backToQueue() {
         v-else-if="currentView === 'annotation' && selectedItemId"
         :item-id="selectedItemId"
         @back="backToQueue"
+        @go-to-pairing="currentView = 'pairing'"
       />
     </main>
   </div>

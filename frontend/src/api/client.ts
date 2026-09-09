@@ -166,6 +166,13 @@ export function deleteItem(id: string) {
   return request<void>(`/items/${id}`, { method: "DELETE" });
 }
 
+export function unpairItem(id: string) {
+  return request<{ transcriptOnlyItem: Item; audioOnlyItem: Item }>(
+    `/items/${id}/unpair`,
+    { method: "POST" },
+  );
+}
+
 export function createSpan(
   itemId: string,
   span: {

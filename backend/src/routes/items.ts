@@ -3,6 +3,8 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { ClientError } from "../lib/errors.js";
+import { determineAudioOnlyStatus } from "../services/itemStatus.js";
 
 export const itemsRouter = Router();
 
@@ -103,6 +105,58 @@ itemsRouter.patch("/items/:id", async (req, res) => {
   });
 
   res.json({ item, spansInvalidated: transcriptChanged });
+});
+
+itemsRouter.post("/items/:id/unpair", async (req, res) => {
+  const existing = await prisma.item.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: { audioFile: true },
+  });
+
+  if (!existing.audioFileId || !existing.originalTranscript) {
+    throw new ClientError(`Item ${req.params.id} is not currently paired`);
+  }
+
+  // Spans reference offsets into the corrected transcript's text, not
+  // the audio, so they stay with the transcript side of the split. That
+  // means the *original* row (keeping its id, transcripts, and spans)
+  // becomes the transcript-only item, and a brand-new row becomes the
+  // audio-only item.
+  //
+  // Order matters: audioFileId is unique, so the old row's link must be
+  // cleared before the new row can claim that same audioFileId.
+  const [transcriptOnlyItem, audioOnlyItem] = await prisma.$transaction(
+    async (tx) => {
+      const transcriptOnlyItem = await tx.item.update({
+        where: { id: existing.id },
+        data: {
+          audioFileId: null,
+          status: "UNMATCHED",
+          speechRateComputed: null,
+          speechRateOverride: null,
+          distanceEstimateComputed: null,
+          distanceEstimateOverride: null,
+          distanceEstimateMethod: null,
+        },
+        include: { spans: true },
+      });
+
+      const audioOnlyItem = await tx.item.create({
+        data: {
+          audioFileId: existing.audioFileId!,
+          status: determineAudioOnlyStatus(existing.audioFile!.durationSec),
+          distanceEstimateComputed: existing.distanceEstimateComputed,
+          distanceEstimateOverride: existing.distanceEstimateOverride,
+          distanceEstimateMethod: existing.distanceEstimateMethod,
+        },
+        include: { audioFile: true },
+      });
+
+      return [transcriptOnlyItem, audioOnlyItem];
+    },
+  );
+
+  res.json({ transcriptOnlyItem, audioOnlyItem });
 });
 
 itemsRouter.delete("/items/:id", async (req, res) => {

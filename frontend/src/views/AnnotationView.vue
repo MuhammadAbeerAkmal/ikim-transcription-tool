@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { getItem, updateItem, type Item } from "../api/client";
+import { getItem, updateItem, unpairItem, type Item } from "../api/client";
 import AudioPlayer from "../components/AudioPlayer.vue";
 import TranscriptEditor from "../components/TranscriptEditor.vue";
 import AnnotationPanel from "../components/AnnotationPanel.vue";
@@ -8,7 +8,7 @@ import RecordingConditionsPanel from "../components/RecordingConditionsPanel.vue
 import { humanize } from "../utils/humanize";
 
 const props = defineProps<{ itemId: string }>();
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ back: []; "go-to-pairing": [] }>();
 
 const item = ref<Item | null>(null);
 const loading = ref(true);
@@ -38,6 +38,22 @@ async function load() {
     error.value = e instanceof Error ? e.message : "Failed to load item";
   } finally {
     loading.value = false;
+  }
+}
+
+const unpairing = ref(false);
+
+async function onUnpair() {
+  const confirmed = window.confirm(
+    "Unpair this audio and transcript? The transcript (and its tags) will move to the Manual Pairing page as an unmatched item; the audio will need a new transcript.",
+  );
+  if (!confirmed) return;
+  unpairing.value = true;
+  try {
+    await unpairItem(props.itemId);
+    emit("back");
+  } finally {
+    unpairing.value = false;
   }
 }
 
@@ -78,7 +94,9 @@ function onCorrectedTranscriptChange(value: string) {
   item.value.correctedTranscript = value;
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
-    const result = await updateItem(props.itemId, { correctedTranscript: value });
+    const result = await updateItem(props.itemId, {
+      correctedTranscript: value,
+    });
     transcriptSaved.value = true;
     if (transcriptFlashTimeout) clearTimeout(transcriptFlashTimeout);
     transcriptFlashTimeout = setTimeout(() => {
@@ -105,15 +123,19 @@ function onCorrectedTranscriptChange(value: string) {
     <p v-else-if="error" class="error-text">{{ error }}</p>
 
     <template v-else-if="item">
-      <p v-if="spansInvalidatedWarning" class="warn-text">
-        Existing tags were cleared because the transcript changed. Their positions no
-        longer matched the text. Please re-tag as needed.
-      </p>
       <div class="meta-row">
         <h2>{{ item.audioFile?.filename }}</h2>
         <span :class="['pill', item.status.toLowerCase()]">{{
           humanize(item.status)
         }}</span>
+        <button
+          v-if="item.originalTranscript"
+          class="unpair-button"
+          :disabled="unpairing"
+          @click="onUnpair"
+        >
+          {{ unpairing ? "Unpairing…" : "Unpair" }}
+        </button>
         <label class="annotator-field">
           Annotator
           <input
@@ -124,33 +146,50 @@ function onCorrectedTranscriptChange(value: string) {
           <span v-if="annotatorSaved" class="saved-badge">Saved</span>
         </label>
       </div>
-      <p class="hint">
-        Listen to the audio, fix the transcript on the right if the AI got it
-        wrong, then select any text to tag it.
-      </p>
-      <AudioPlayer ref="audioPlayerRef" :src="audioSrc" />
 
-      <div class="workspace">
-        <TranscriptEditor
-          :original-transcript="item.originalTranscript ?? ''"
-          :corrected-transcript="item.correctedTranscript ?? ''"
-          :duration-sec="item.audioFile?.durationSec ?? 0"
-          :saved="transcriptSaved"
-          @seek="onSeek"
-          @tag-selection="onTagSelection"
-          @update:corrected-transcript="onCorrectedTranscriptChange"
-        />
-
-        <AnnotationPanel
-          :item-id="item.id"
-          :pending-selection="pendingSelection"
-          :spans="item.spans ?? []"
-          @spans-changed="load"
-          @clear-selection="pendingSelection = null"
-        />
+      <div v-if="!item.originalTranscript" class="card not-paired">
+        <p class="empty-title">No transcript yet</p>
+        <p class="hint">
+          This audio doesn't have a transcript paired with it yet. There's
+          nothing to correct or tag until it does. Add one from the Upload page,
+          or pair it with an existing unmatched transcript.
+        </p>
+        <button @click="emit('go-to-pairing')">Go to Manual Pairing</button>
       </div>
 
-      <RecordingConditionsPanel :item="item" @updated="load" />
+      <template v-else>
+        <p v-if="spansInvalidatedWarning" class="warn-text">
+          Existing tags were cleared because the transcript changed. Their
+          positions no longer matched the text. Please re-tag as needed.
+        </p>
+        <p class="hint">
+          Listen to the audio, fix the transcript on the right if the AI got it
+          wrong, then select any text to tag it.
+        </p>
+        <AudioPlayer ref="audioPlayerRef" :src="audioSrc" />
+
+        <div class="workspace">
+          <TranscriptEditor
+            :original-transcript="item.originalTranscript ?? ''"
+            :corrected-transcript="item.correctedTranscript ?? ''"
+            :duration-sec="item.audioFile?.durationSec ?? 0"
+            :saved="transcriptSaved"
+            @seek="onSeek"
+            @tag-selection="onTagSelection"
+            @update:corrected-transcript="onCorrectedTranscriptChange"
+          />
+
+          <AnnotationPanel
+            :item-id="item.id"
+            :pending-selection="pendingSelection"
+            :spans="item.spans ?? []"
+            @spans-changed="load"
+            @clear-selection="pendingSelection = null"
+          />
+        </div>
+
+        <RecordingConditionsPanel :item="item" @updated="load" />
+      </template>
     </template>
   </div>
 </template>
@@ -187,6 +226,37 @@ function onCorrectedTranscriptChange(value: string) {
 h2 {
   font-size: 1.2rem;
   margin: 0;
+}
+
+.unpair-button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.unpair-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.not-paired {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.not-paired .hint {
+  margin: 0 0 1.1rem;
 }
 
 .annotator-field {
