@@ -3,6 +3,7 @@ import cors from "cors";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { ingestRouter } from "./routes/ingest.js";
 import { annotationsRouter } from "./routes/annotations.js";
+import { itemsRouter } from "./routes/items.js";
 
 export const app = express();
 
@@ -15,5 +16,6 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", ingestRouter);
 app.use("/api", annotationsRouter);
+app.use("/api", itemsRouter);
 
 app.use(errorHandler);
