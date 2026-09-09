@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   determineInitialStatus,
+  determineAudioOnlyStatus,
   REJECTION_THRESHOLD_SECONDS,
 } from "../src/services/itemStatus.js";
 
@@ -18,5 +19,15 @@ describe("determineInitialStatus", () => {
 
   it("uses the exported threshold constant", () => {
     expect(REJECTION_THRESHOLD_SECONDS).toBe(15);
+  });
+});
+
+describe("determineAudioOnlyStatus", () => {
+  it("rejects audio at or under 15 seconds even without a transcript", () => {
+    expect(determineAudioOnlyStatus(15)).toBe("REJECTED");
+  });
+
+  it("marks longer audio as unmatched, awaiting a transcript", () => {
+    expect(determineAudioOnlyStatus(15.01)).toBe("UNMATCHED");
   });
 });

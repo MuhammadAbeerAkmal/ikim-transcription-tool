@@ -8,7 +8,10 @@ import {
   extractMetadata,
   estimateDistance,
 } from "../services/audioMetadata.js";
-import { determineInitialStatus } from "../services/itemStatus.js";
+import {
+  determineInitialStatus,
+  determineAudioOnlyStatus,
+} from "../services/itemStatus.js";
 import {
   validateTranscriptRows,
   pairTranscriptsToAudio,
@@ -43,7 +46,7 @@ ingestRouter.post("/audio", uploadAudio.array("files"), async (req, res) => {
     const item = await prisma.item.create({
       data: {
         audioFileId: audioFile.id,
-        status: determineInitialStatus(metadata.durationSec),
+        status: determineAudioOnlyStatus(metadata.durationSec),
         distanceEstimateComputed,
       },
     });
@@ -66,7 +69,7 @@ ingestRouter.post("/transcripts", async (req, res) => {
   const { validRows, errors } = validateTranscriptRows(rows);
 
   const openAudioItems = await prisma.item.findMany({
-    where: { audioFileId: { not: null }, originalTranscript: null },
+    where: { status: "UNMATCHED" },
     include: { audioFile: true },
   });
   const audioFilenames = openAudioItems.map((i) => i.audioFile!.filename);
