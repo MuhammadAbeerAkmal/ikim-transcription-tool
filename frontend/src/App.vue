@@ -52,7 +52,11 @@ function backToQueue() {
 
     <main class="app-main">
       <IngestView v-if="currentView === 'ingest'" />
-      <QueueView v-else-if="currentView === 'queue'" @open-item="openItem" />
+      <QueueView
+        v-else-if="currentView === 'queue'"
+        @open-item="openItem"
+        @go-to-upload="currentView = 'ingest'"
+      />
       <PairingView v-else-if="currentView === 'pairing'" />
       <AnnotationView
         v-else-if="currentView === 'annotation' && selectedItemId"

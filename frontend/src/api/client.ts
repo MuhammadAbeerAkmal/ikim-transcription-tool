@@ -162,6 +162,10 @@ export function updateItem(
   });
 }
 
+export function deleteItem(id: string) {
+  return request<void>(`/items/${id}`, { method: "DELETE" });
+}
+
 export function createSpan(
   itemId: string,
   span: {

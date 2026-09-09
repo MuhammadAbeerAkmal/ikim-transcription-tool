@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import fs from "node:fs/promises";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 
@@ -84,7 +85,7 @@ itemsRouter.patch("/items/:id", async (req, res) => {
     updates.correctedTranscript !== undefined &&
     updates.correctedTranscript !== existing.correctedTranscript;
 
-  // Editing the transcript invalidates existing span offsets — they were
+  // Editing the transcript invalidates existing span offsets. They were
   // recorded against the old text, and a real shift-on-edit would need a
   // proper diff (and still be ambiguous for edits landing inside a span).
   // Rather than leave spans silently pointing at the wrong substring in
@@ -102,4 +103,31 @@ itemsRouter.patch("/items/:id", async (req, res) => {
   });
 
   res.json({ item, spansInvalidated: transcriptChanged });
+});
+
+itemsRouter.delete("/items/:id", async (req, res) => {
+  const item = await prisma.item.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: { audioFile: true },
+  });
+
+  // Deleting the Item cascades to its spans automatically (schema's
+  // onDelete: Cascade). The AudioFile is a separate row, deleted here
+  // explicitly. Leaving it behind would be an orphaned row with no
+  // Item pointing at it, and its file would linger on disk forever.
+  await prisma.$transaction(async (tx) => {
+    await tx.item.delete({ where: { id: item.id } });
+    if (item.audioFileId) {
+      await tx.audioFile.delete({ where: { id: item.audioFileId } });
+    }
+  });
+
+  if (item.audioFile) {
+    await fs.unlink(item.audioFile.path).catch(() => {
+      // File already gone or unreadable. Not worth failing the request
+      // over, the database rows are already cleaned up correctly.
+    });
+  }
+
+  res.status(204).send();
 });

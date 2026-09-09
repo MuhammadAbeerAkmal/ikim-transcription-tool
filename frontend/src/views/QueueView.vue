@@ -2,13 +2,17 @@
 import { ref, onMounted, watch } from "vue";
 import {
   listItems,
+  deleteItem,
   exportUrl,
   type QueueItem,
   type ItemStatus,
 } from "../api/client";
 import { humanize } from "../utils/humanize";
 
-const emit = defineEmits<{ "open-item": [itemId: string] }>();
+const emit = defineEmits<{
+  "open-item": [itemId: string];
+  "go-to-upload": [];
+}>();
 
 const items = ref<QueueItem[]>([]);
 const loading = ref(false);
@@ -40,6 +44,15 @@ watch([statusFilter, sort], load);
 function formatDuration(sec: number | null) {
   if (sec === null) return "-";
   return `${sec.toFixed(1)}s`;
+}
+
+async function onDelete(item: QueueItem) {
+  const confirmed = window.confirm(
+    `Delete "${item.filename}"? This removes the audio file and any tags permanently.`,
+  );
+  if (!confirmed) return;
+  await deleteItem(item.id);
+  await load();
 }
 </script>
 
@@ -75,11 +88,13 @@ function formatDuration(sec: number | null) {
     </div>
 
     <div class="card table-card">
-      <p v-if="loading" class="hint">Loading…</p>
-      <p v-else-if="error" class="error-text">{{ error }}</p>
-      <p v-else-if="items.length === 0" class="hint">
-        No items yet. Upload some audio to get started.
-      </p>
+      <p v-if="loading" class="hint loading-state">Loading…</p>
+      <p v-else-if="error" class="error-text loading-state">{{ error }}</p>
+      <div v-else-if="items.length === 0" class="empty-state">
+        <p class="empty-title">No recordings yet</p>
+        <p class="hint">Upload some audio to start building your work queue.</p>
+        <button @click="emit('go-to-upload')">Upload audio</button>
+      </div>
 
       <table v-else>
         <thead>
@@ -88,6 +103,7 @@ function formatDuration(sec: number | null) {
             <th>Duration</th>
             <th>Status</th>
             <th>Annotator</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -105,6 +121,9 @@ function formatDuration(sec: number | null) {
               }}</span>
             </td>
             <td>{{ item.annotator ?? "-" }}</td>
+            <td class="actions">
+              <button class="link danger" @click.stop="onDelete(item)">Delete</button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -163,10 +182,24 @@ table {
   font-size: 0.9rem;
 }
 
-table .hint,
-table .error-text {
+.loading-state {
   padding: 1.25rem;
   display: block;
+}
+
+.empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.empty-state .hint {
+  margin: 0 0 1.1rem;
 }
 
 th {
@@ -188,6 +221,22 @@ td {
 
 .numeric {
   font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  text-align: right;
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+button.link.danger {
+  color: var(--color-danger);
 }
 
 .row {

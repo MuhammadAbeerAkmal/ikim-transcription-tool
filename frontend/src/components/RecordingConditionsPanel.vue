@@ -24,7 +24,7 @@ watch(
 async function saveOverrides() {
   saving.value = true;
   try {
-    // Send the real value, including null — coalescing null to undefined
+    // Send the real value, including null, coalescing null to undefined
     // here would silently turn "clear this override" into "don't touch
     // it," making overrides impossible to undo once set.
     await updateItem(props.item.id, {

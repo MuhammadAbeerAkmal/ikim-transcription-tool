@@ -68,7 +68,7 @@ describe("normalizeSpokenNumber", () => {
   it("reads a sequence of single-digit words as a digit sequence, distinct from the same-valued cardinal number", () => {
     // brief's example: "sechs null" means the suture size 6/0, not sixty.
     // Both produce the numeric value 60, so `rendering` is what actually
-    // distinguishes them — this is the field a consumer must check.
+    // distinguishes them. This is the field a consumer must check.
     const digitSequence = normalizeSpokenNumber("sechs null");
     const cardinalSixty = normalizeSpokenNumber("sechzig");
     expect(digitSequence).toEqual({ value: 60, rendering: "digits" });

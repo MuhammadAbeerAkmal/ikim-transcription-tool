@@ -49,8 +49,8 @@ annotationsRouter.post("/items/:itemId/spans", async (req, res) => {
   res.status(201).json({ span });
 });
 
-// Never trust a client-supplied normalizedValue for MEASUREMENT spans —
-// recompute it server-side from value+unit, same principle as duration
+// Never trust a client-supplied normalizedValue for MEASUREMENT spans.
+// Recompute it server-side from value+unit, same principle as duration
 // always being read server-side rather than accepted from the client.
 function resolveAttributes(
   spanInput: AnnotationSpanInput,
@@ -111,7 +111,9 @@ annotationsRouter.patch("/spans/:id", async (req, res) => {
     data: {
       startOffset,
       endOffset,
-      attributes: attributes ? (attributes as Prisma.InputJsonValue) : undefined,
+      attributes: attributes
+        ? (attributes as Prisma.InputJsonValue)
+        : undefined,
     },
   });
 

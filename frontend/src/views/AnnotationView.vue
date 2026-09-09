@@ -87,7 +87,7 @@ function onCorrectedTranscriptChange(value: string) {
 
     if (result.spansInvalidated && item.value) {
       // Editing the transcript clears existing spans server-side (their
-      // offsets would otherwise silently point at the wrong text) —
+      // offsets would otherwise silently point at the wrong text)
       // reflect that locally without a full reload, to avoid a loading
       // flicker in the middle of an autosave.
       item.value.spans = [];
@@ -106,7 +106,7 @@ function onCorrectedTranscriptChange(value: string) {
 
     <template v-else-if="item">
       <p v-if="spansInvalidatedWarning" class="warn-text">
-        Existing tags were cleared because the transcript changed — their positions no
+        Existing tags were cleared because the transcript changed. Their positions no
         longer matched the text. Please re-tag as needed.
       </p>
       <div class="meta-row">
