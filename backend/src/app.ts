@@ -4,6 +4,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { ingestRouter } from "./routes/ingest.js";
 import { annotationsRouter } from "./routes/annotations.js";
 import { itemsRouter } from "./routes/items.js";
+import { exportRouter } from "./routes/export.js";
 
 export const app = express();
 
@@ -17,5 +18,6 @@ app.get("/health", (_req, res) => {
 app.use("/api", ingestRouter);
 app.use("/api", annotationsRouter);
 app.use("/api", itemsRouter);
+app.use("/api", exportRouter);
 
 app.use(errorHandler);
