@@ -61,4 +61,15 @@ describe("pairTranscriptsToAudio", () => {
     );
     expect(unmatchedTranscripts).toHaveLength(1);
   });
+
+  it("does not auto-match when two audio files share a basename", () => {
+    const { matched, unmatchedAudio, unmatchedTranscripts } =
+      pairTranscriptsToAudio(
+        [{ path: "audio/dup.wav", label: "Hello" }],
+        ["path1/dup.wav", "path2/dup.wav"],
+      );
+    expect(matched).toHaveLength(0);
+    expect(unmatchedAudio).toEqual(["path1/dup.wav", "path2/dup.wav"]);
+    expect(unmatchedTranscripts).toHaveLength(1);
+  });
 });

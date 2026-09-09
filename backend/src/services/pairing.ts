@@ -69,7 +69,24 @@ export function pairTranscriptsToAudio(
   transcriptRows: TranscriptRow[],
   audioFilenames: string[],
 ): PairingResult {
-  const audioByBasename = new Map(audioFilenames.map((f) => [basename(f), f]));
+  // If two audio files share a basename, we can't safely tell which one a
+  // transcript row is meant for so excluding both from auto-matching (rather
+  // than letting a Map silently keep only the last one) means neither gets
+  // dropped; both surface in unmatchedAudio for the user to pair manually.
+  const basenameCounts = new Map<string, number>();
+  for (const f of audioFilenames) {
+    const key = basename(f);
+    basenameCounts.set(key, (basenameCounts.get(key) ?? 0) + 1);
+  }
+
+  const audioByBasename = new Map<string, string>();
+  for (const f of audioFilenames) {
+    const key = basename(f);
+    if (basenameCounts.get(key) === 1) {
+      audioByBasename.set(key, f);
+    }
+  }
+
   const matchedAudioFilenames = new Set<string>();
   const matched: MatchedPair[] = [];
   const unmatchedTranscripts: TranscriptRow[] = [];

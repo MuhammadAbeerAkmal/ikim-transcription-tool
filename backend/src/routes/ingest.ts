@@ -3,6 +3,8 @@ import { z } from "zod";
 import { uploadAudio } from "../middleware/upload.js";
 import { prisma } from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
+import { ClientError } from "../lib/errors.js";
+import type { AudioFile, Item } from "@prisma/client";
 
 import {
   extractMetadata,
@@ -21,40 +23,51 @@ export const ingestRouter = Router();
 
 ingestRouter.post("/audio", uploadAudio.array("files"), async (req, res) => {
   const files = req.files as Express.Multer.File[];
-  const created = [];
+  const created: Array<{ audioFile: AudioFile; item: Item }> = [];
+  const failed: Array<{ filename: string; reason: string }> = [];
 
   for (const file of files) {
-    const metadata = await extractMetadata(file.path);
-    const distanceEstimateComputed = await estimateDistance(file.path);
+    try {
+      const metadata = await extractMetadata(file.path);
+      const distanceEstimateComputed = await estimateDistance(file.path);
 
-    const audioFile = await prisma.audioFile.create({
-      data: {
+      const audioFile = await prisma.audioFile.create({
+        data: {
+          filename: file.originalname,
+          path: file.path,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          durationSec: metadata.durationSec,
+          sampleRate: metadata.sampleRate,
+          channels: metadata.channels,
+          bitDepth: metadata.bitDepth,
+          metadata: (metadata.metadata ?? undefined) as
+            | Prisma.InputJsonValue
+            | undefined,
+        },
+      });
+
+      const item = await prisma.item.create({
+        data: {
+          audioFileId: audioFile.id,
+          status: determineAudioOnlyStatus(metadata.durationSec),
+          distanceEstimateComputed,
+        },
+      });
+
+      created.push({ audioFile, item });
+    } catch (err) {
+      failed.push({
         filename: file.originalname,
-        path: file.path,
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        durationSec: metadata.durationSec,
-        sampleRate: metadata.sampleRate,
-        channels: metadata.channels,
-        bitDepth: metadata.bitDepth,
-        metadata: (metadata.metadata ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
-      },
-    });
-
-    const item = await prisma.item.create({
-      data: {
-        audioFileId: audioFile.id,
-        status: determineAudioOnlyStatus(metadata.durationSec),
-        distanceEstimateComputed,
-      },
-    });
-
-    created.push({ audioFile, item });
+        reason:
+          err instanceof Error ? err.message : "Unable to process this file",
+      });
+    }
   }
 
-  res.status(201).json({ created });
+  // 201 only makes sense if something was actually created; an all-failed
+  // batch is a client-side problem (bad files), not a successful creation.
+  res.status(created.length > 0 ? 201 : 400).json({ created, failed });
 });
 
 const transcriptsRequestSchema = z.union([
@@ -68,8 +81,11 @@ ingestRouter.post("/transcripts", async (req, res) => {
 
   const { validRows, errors } = validateTranscriptRows(rows);
 
+  // status: "UNMATCHED" alone is not enough, transcript-only orphan items
+  // also get that status but have no audioFile, which would crash the
+  // `i.audioFile!.filename` map below. Filter explicitly for audio-bearing rows.
   const openAudioItems = await prisma.item.findMany({
-    where: { status: "UNMATCHED" },
+    where: { status: "UNMATCHED", audioFileId: { not: null } },
     include: { audioFile: true },
   });
   const audioFilenames = openAudioItems.map((i) => i.audioFile!.filename);
@@ -132,6 +148,17 @@ ingestRouter.post("/pairing/manual", async (req, res) => {
     }),
     prisma.item.findUniqueOrThrow({ where: { id: transcriptItemId } }),
   ]);
+
+  if (!audioItem.audioFile) {
+    throw new ClientError(
+      `Invalid pairing: audioItemId ${audioItemId} has no audio file attached`,
+    );
+  }
+  if (!transcriptItem.originalTranscript || transcriptItem.audioFileId) {
+    throw new ClientError(
+      `Invalid pairing: transcriptItemId ${transcriptItemId} is not a transcript-only item`,
+    );
+  }
 
   const merged = await prisma.item.update({
     where: { id: audioItem.id },

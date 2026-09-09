@@ -1,8 +1,14 @@
 import type { ErrorRequestHandler } from "express";
 import { MulterError } from "multer";
 import { ZodError } from "zod";
+import { ClientError } from "../lib/errors.js";
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  if (err instanceof ClientError) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: "Validation failed",
