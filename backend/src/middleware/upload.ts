@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import fs from "node:fs";
 
-const STORAGE_DIR = path.join(process.cwd(), "storage", "audio");
+export const STORAGE_DIR = path.join(process.cwd(), "storage", "audio");
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
 const ALLOWED_EXTENSIONS = new Set([".wav", ".mp3", ".m4a"]);

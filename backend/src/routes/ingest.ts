@@ -138,6 +138,31 @@ ingestRouter.post("/transcripts", async (req, res) => {
   });
 });
 
+ingestRouter.get("/pairing/unmatched", async (_req, res) => {
+  const [unmatchedAudioItems, unmatchedTranscriptItems] = await Promise.all([
+    prisma.item.findMany({
+      where: { status: "UNMATCHED", audioFileId: { not: null } },
+      include: { audioFile: true },
+    }),
+    prisma.item.findMany({
+      where: { audioFileId: null, originalTranscript: { not: null } },
+    }),
+  ]);
+
+  res.json({
+    unmatchedAudioItems: unmatchedAudioItems.map((i) => ({
+      id: i.id,
+      filename: i.audioFile!.filename,
+      durationSec: i.audioFile!.durationSec,
+    })),
+    unmatchedTranscriptItems: unmatchedTranscriptItems.map((i) => ({
+      id: i.id,
+      transcriptSourcePath: i.transcriptSourcePath,
+      originalTranscript: i.originalTranscript,
+    })),
+  });
+});
+
 const manualPairSchema = z.object({
   audioItemId: z.string(),
   transcriptItemId: z.string(),

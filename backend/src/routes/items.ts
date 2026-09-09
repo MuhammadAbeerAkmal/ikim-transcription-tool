@@ -66,15 +66,40 @@ const updateItemSchema = z.object({
   correctedTranscript: z.string().optional(),
   annotator: z.string().optional(),
   status: statusEnum.optional(),
-  speechRateOverride: z.number().optional(),
-  distanceEstimateOverride: z.number().optional(),
+  // .nullable() matters here: an annotator clearing an override (going
+  // back to the computed suggestion) sends null explicitly, which is
+  // different from omitting the field entirely (leave it as-is).
+  speechRateOverride: z.number().nullable().optional(),
+  distanceEstimateOverride: z.number().nullable().optional(),
 });
 
 itemsRouter.patch("/items/:id", async (req, res) => {
   const updates = updateItemSchema.parse(req.body);
-  const item = await prisma.item.update({
+
+  const existing = await prisma.item.findUniqueOrThrow({
     where: { id: req.params.id },
-    data: updates,
   });
-  res.json({ item });
+
+  const transcriptChanged =
+    updates.correctedTranscript !== undefined &&
+    updates.correctedTranscript !== existing.correctedTranscript;
+
+  // Editing the transcript invalidates existing span offsets — they were
+  // recorded against the old text, and a real shift-on-edit would need a
+  // proper diff (and still be ambiguous for edits landing inside a span).
+  // Rather than leave spans silently pointing at the wrong substring in
+  // the exported data, clear them and let the annotator re-tag. Done in
+  // a transaction so the transcript update and span clear land together.
+  const item = await prisma.$transaction(async (tx) => {
+    if (transcriptChanged) {
+      await tx.annotationSpan.deleteMany({ where: { itemId: req.params.id } });
+    }
+    return tx.item.update({
+      where: { id: req.params.id },
+      data: updates,
+      include: { spans: true },
+    });
+  });
+
+  res.json({ item, spansInvalidated: transcriptChanged });
 });

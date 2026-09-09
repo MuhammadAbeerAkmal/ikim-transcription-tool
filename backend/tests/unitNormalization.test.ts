@@ -50,24 +50,30 @@ describe("normalizeMeasurement", () => {
 });
 
 describe("normalizeSpokenNumber", () => {
-  it("parses the brief's own example: zwoelf becomes 12", () => {
-    expect(normalizeSpokenNumber("zwoelf")).toBe(12);
-    expect(normalizeSpokenNumber("zwölf")).toBe(12);
+  it("parses the brief's own example: zwoelf becomes 12, rendered as words", () => {
+    expect(normalizeSpokenNumber("zwoelf")).toEqual({ value: 12, rendering: "words" });
+    expect(normalizeSpokenNumber("zwölf")).toEqual({ value: 12, rendering: "words" });
   });
 
-  it("parses simple single-digit words", () => {
-    expect(normalizeSpokenNumber("sechs")).toBe(6);
-    expect(normalizeSpokenNumber("null")).toBe(0);
+  it("parses simple single-digit words as words", () => {
+    expect(normalizeSpokenNumber("sechs")).toEqual({ value: 6, rendering: "words" });
+    expect(normalizeSpokenNumber("null")).toEqual({ value: 0, rendering: "words" });
   });
 
-  it("parses compound tens-and-ones numbers", () => {
-    expect(normalizeSpokenNumber("einundzwanzig")).toBe(21);
-    expect(normalizeSpokenNumber("neunundneunzig")).toBe(99);
+  it("parses compound tens-and-ones numbers as words", () => {
+    expect(normalizeSpokenNumber("einundzwanzig")).toEqual({ value: 21, rendering: "words" });
+    expect(normalizeSpokenNumber("neunundneunzig")).toEqual({ value: 99, rendering: "words" });
   });
 
-  it("reads a sequence of single-digit words as a digit sequence, not multiplied out", () => {
-    // brief's example: "sechs null" means the suture size 6/0, not sixty
-    expect(normalizeSpokenNumber("sechs null")).toBe(60);
+  it("reads a sequence of single-digit words as a digit sequence, distinct from the same-valued cardinal number", () => {
+    // brief's example: "sechs null" means the suture size 6/0, not sixty.
+    // Both produce the numeric value 60, so `rendering` is what actually
+    // distinguishes them — this is the field a consumer must check.
+    const digitSequence = normalizeSpokenNumber("sechs null");
+    const cardinalSixty = normalizeSpokenNumber("sechzig");
+    expect(digitSequence).toEqual({ value: 60, rendering: "digits" });
+    expect(cardinalSixty).toEqual({ value: 60, rendering: "words" });
+    expect(digitSequence?.rendering).not.toBe(cardinalSixty?.rendering);
   });
 
   it("returns null for unparseable input", () => {

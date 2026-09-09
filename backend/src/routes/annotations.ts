@@ -6,7 +6,12 @@ import { ClientError } from "../lib/errors.js";
 import {
   annotationSpanSchema,
   validateOffsets,
+  type AnnotationSpanInput,
 } from "../services/spanValidation.js";
+import {
+  normalizeMeasurement,
+  type MeasurementUnit,
+} from "../services/unitNormalization.js";
 
 export const annotationsRouter = Router();
 
@@ -37,12 +42,26 @@ annotationsRouter.post("/items/:itemId/spans", async (req, res) => {
       type: spanInput.type,
       startOffset: spanInput.startOffset,
       endOffset: spanInput.endOffset,
-      attributes: spanInput.attributes as Prisma.InputJsonValue,
+      attributes: resolveAttributes(spanInput) as Prisma.InputJsonValue,
     },
   });
 
   res.status(201).json({ span });
 });
+
+// Never trust a client-supplied normalizedValue for MEASUREMENT spans —
+// recompute it server-side from value+unit, same principle as duration
+// always being read server-side rather than accepted from the client.
+function resolveAttributes(
+  spanInput: AnnotationSpanInput,
+): Record<string, unknown> {
+  if (spanInput.type !== "MEASUREMENT") return spanInput.attributes;
+  const { normalizedValue } = normalizeMeasurement(
+    spanInput.attributes.value,
+    spanInput.attributes.unit as MeasurementUnit,
+  );
+  return { ...spanInput.attributes, normalizedValue };
+}
 
 const updateSpanSchema = z.object({
   startOffset: z.number().int().min(0).optional(),
@@ -71,14 +90,28 @@ annotationsRouter.patch("/spans/:id", async (req, res) => {
     throw new ClientError(offsetError);
   }
 
+  // Same rule as span creation: never trust a client-supplied
+  // normalizedValue for a MEASUREMENT span, recompute it server-side.
+  let attributes = updates.attributes;
+  if (
+    existing.type === "MEASUREMENT" &&
+    attributes &&
+    typeof attributes.value === "number" &&
+    typeof attributes.unit === "string"
+  ) {
+    const { normalizedValue } = normalizeMeasurement(
+      attributes.value,
+      attributes.unit as MeasurementUnit,
+    );
+    attributes = { ...attributes, normalizedValue };
+  }
+
   const span = await prisma.annotationSpan.update({
     where: { id },
     data: {
       startOffset,
       endOffset,
-      attributes: updates.attributes
-        ? (updates.attributes as Prisma.InputJsonValue)
-        : undefined,
+      attributes: attributes ? (attributes as Prisma.InputJsonValue) : undefined,
     },
   });
 

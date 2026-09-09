@@ -111,27 +111,47 @@ function parseGermanNumberWord(word: string): number | null {
   return null;
 }
 
+export interface SpokenNumberResult {
+  value: number;
+  // Mirrors the NUMBER annotation type's own "rendering" attribute
+  // (digits | words) from the brief — reused here deliberately, since
+  // it's exactly the distinction this function needs to preserve.
+  // A plain `number` return can't tell "sixty" (words) apart from "6/0"
+  // (digits) once both collapse to the value 60 — that was a real bug:
+  // the old version claimed to handle this case but silently discarded
+  // the distinction its own docstring said it preserved.
+  rendering: "digits" | "words";
+}
+
 /**
- * Parses a spoken German number phrase into a digit value.
+ * Parses a spoken German number phrase into a digit value plus how it
+ * was rendered. Handles standard cardinal numbers ("zwölf" -> 12, words)
+ * and digit sequences ("sechs null" -> 60, digits — the brief's own
+ * suture-size example, "6/0", not the number sixty). The `rendering`
+ * field is what lets a consumer tell those two cases apart; the numeric
+ * value alone cannot.
  *
- * Handles standard cardinal numbers ("zwölf" -> 12, "einundzwanzig" -> 21).
- * For multi-word input where every word is itself a single digit (e.g.
- * "sechs null"), falls back to reading them as a literal digit sequence
- * rather than sixty, matching the brief's own worked example, where
- * "sechs null" denotes a suture size ("6/0"), not the number sixty. This
- * is a heuristic, not a general solution to that ambiguity.
+ * STATUS: demonstrated-correct and tested, but not yet called from any
+ * route or from the frontend's NUMBER annotation form — the annotator
+ * currently types `rendering` and the value by hand there. Wiring this
+ * in (e.g. auto-suggesting both from a typed spoken-text field) is real
+ * UI work, deliberately not done yet given time constraints. Unlike
+ * normalizeMeasurement (which the backend does call, to validate a
+ * MEASUREMENT span's normalizedValue instead of trusting the client),
+ * this one currently has no live caller.
  */
-export function normalizeSpokenNumber(text: string): number | null {
+export function normalizeSpokenNumber(text: string): SpokenNumberResult | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
 
   if (words.length === 1) {
-    return parseGermanNumberWord(words[0]);
+    const value = parseGermanNumberWord(words[0]);
+    return value === null ? null : { value, rendering: "words" };
   }
 
   const digits = words.map((w) => parseGermanNumberWord(w));
   if (digits.every((d) => d !== null && d >= 0 && d <= 9)) {
-    return Number(digits.join(""));
+    return { value: Number(digits.join("")), rendering: "digits" };
   }
 
   return null;
