@@ -60,7 +60,12 @@ For active development, run the database in Docker and the backend/frontend loca
 
 ## Testing
 
+Runs against a real database, so this needs the same local setup as "Local development" above: Postgres up (`docker compose up -d db`) and a `backend/.env` file with `DATABASE_URL` (see step 2 above).
+
 ```bash
 cd backend
+yarn install
+yarn prisma migrate dev
+yarn prisma generate
 yarn test
 ```
