@@ -4,26 +4,24 @@ Doctors dictate operation reports, a speech model transcribes them, and someone 
 
 Built for the IKIM Full Stack Engineer coding challenge (Node/Express/Prisma/PostgreSQL + Vue 3).
 
-**Status:**
+## Run it
 
-- Actively in progress.
-- Ingest, audio upload, server-side duration checks, transcript pairing is built and tested.
-- Work queue, annotation, and export are next.
+```bash
+docker compose up
+```
 
-## Prerequisites
+That's it. This starts PostgreSQL, runs pending migrations, and starts the backend (`http://localhost:4000`) and frontend (`http://localhost:5173`). Open `http://localhost:5173` and start uploading audio.
 
-- Node.js 22
-- Yarn (classic, v1)
-- Docker Desktop (for PostgreSQL)
+Requires Docker Desktop only, nothing else needs to be installed on the host.
 
-## Setup
+## Local development (hot reload)
 
-> The steps below run the database in Docker and the backend/frontend locally with Yarn, for fast reload during active development. Before final submission, this collapses to a single `docker compose up` starting the whole app, not yet wired since the app itself is still being built.
+For active development, run the database in Docker and the backend/frontend locally with Yarn instead:
 
 1. Start Postgres:
 
    ```bash
-   docker compose up -d
+   docker compose up -d db
    ```
 
 2. Backend:

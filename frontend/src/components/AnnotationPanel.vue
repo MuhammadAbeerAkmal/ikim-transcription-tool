@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import {
   createSpan,
+  updateSpan,
   deleteSpan,
   type AnnotationSpan,
   type AnnotationType,
@@ -10,6 +11,7 @@ import { humanize } from "../utils/humanize";
 
 const props = defineProps<{
   itemId: string;
+  correctedTranscript: string;
   pendingSelection: {
     startOffset: number;
     endOffset: number;
@@ -23,6 +25,7 @@ const emit = defineEmits<{ "spans-changed": []; "clear-selection": [] }>();
 const selectedType = ref<AnnotationType>("MEDICAL_TERM");
 const error = ref<string | null>(null);
 const submitting = ref(false);
+const editingSpan = ref<AnnotationSpan | null>(null);
 
 const editType = ref<"correct" | "add" | "delete">("correct");
 const numberRendering = ref<"digits" | "words">("digits");
@@ -119,21 +122,87 @@ function buildAttributes(): Record<string, unknown> {
   }
 }
 
+// Reverse of buildAttributes: populates the form's per-type fields from
+// an existing span's stored attributes, so editing starts from its
+// current values instead of the form's defaults.
+function loadAttributesIntoForm(span: AnnotationSpan) {
+  const a = span.attributes as Record<string, unknown>;
+  switch (span.type) {
+    case "CRUD":
+      editType.value = (a.editType as typeof editType.value) ?? "correct";
+      break;
+    case "NUMBER":
+      numberRendering.value =
+        (a.rendering as typeof numberRendering.value) ?? "digits";
+      numberValue.value = (a.normalizedValue as number) ?? 0;
+      break;
+    case "FORMATTING_COMMAND":
+      formattingCommand.value = (a.command as string) ?? "newline";
+      isLiteral.value = (a.isLiteral as boolean) ?? false;
+      break;
+    case "SPELLED_OUT":
+      resolvedWord.value = (a.resolvedWord as string) ?? "";
+      break;
+    case "NAMED_ENTITY":
+      entityType.value = (a.entityType as typeof entityType.value) ?? "person";
+      break;
+    case "MEDICAL_TERM":
+      medicalCategory.value =
+        (a.category as typeof medicalCategory.value) ?? "drug";
+      medicalNote.value = (a.note as string) ?? "";
+      break;
+    case "MEASUREMENT":
+      measurementValue.value = (a.value as number) ?? 0;
+      measurementUnit.value = (a.unit as string) ?? "mg";
+      break;
+  }
+}
+
+function startEdit(span: AnnotationSpan) {
+  editingSpan.value = span;
+  selectedType.value = span.type;
+  loadAttributesIntoForm(span);
+  emit("clear-selection");
+}
+
+function cancelForm() {
+  editingSpan.value = null;
+  emit("clear-selection");
+}
+
+// A fresh text selection always wins over an in-progress edit. Only one
+// form should be active at a time.
+watch(
+  () => props.pendingSelection,
+  (selection) => {
+    if (selection) editingSpan.value = null;
+  },
+);
+
 async function submit() {
-  if (!props.pendingSelection) return;
   error.value = null;
   submitting.value = true;
   try {
-    await createSpan(props.itemId, {
-      type: selectedType.value,
-      startOffset: props.pendingSelection.startOffset,
-      endOffset: props.pendingSelection.endOffset,
-      attributes: buildAttributes(),
-    });
+    if (editingSpan.value) {
+      await updateSpan(editingSpan.value.id, {
+        type: selectedType.value,
+        attributes: buildAttributes(),
+      });
+    } else if (props.pendingSelection) {
+      await createSpan(props.itemId, {
+        type: selectedType.value,
+        startOffset: props.pendingSelection.startOffset,
+        endOffset: props.pendingSelection.endOffset,
+        attributes: buildAttributes(),
+      });
+    } else {
+      return;
+    }
     emit("spans-changed");
+    editingSpan.value = null;
     emit("clear-selection");
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to create span";
+    error.value = e instanceof Error ? e.message : "Failed to save span";
   } finally {
     submitting.value = false;
   }
@@ -141,16 +210,24 @@ async function submit() {
 
 async function removeSpan(id: string) {
   await deleteSpan(id);
+  if (editingSpan.value?.id === id) editingSpan.value = null;
   emit("spans-changed");
 }
 </script>
 
 <template>
   <div class="annotation-panel card">
-    <div v-if="pendingSelection" class="new-span">
-      <p class="eyebrow">New tag</p>
+    <div v-if="pendingSelection || editingSpan" class="new-span">
+      <p class="eyebrow">{{ editingSpan ? "Editing tag" : "New tag" }}</p>
       <p class="selection-preview">
-        "<em>{{ pendingSelection.text }}</em
+        "<em>{{
+          editingSpan
+            ? correctedTranscript.slice(
+                editingSpan.startOffset,
+                editingSpan.endOffset,
+              )
+            : pendingSelection?.text
+        }}</em
         >"
       </p>
 
@@ -253,10 +330,10 @@ async function removeSpan(id: string) {
       </div>
 
       <div class="actions">
-        <button :disabled="submitting" @click="submit">Create span</button>
-        <button class="secondary" @click="emit('clear-selection')">
-          Cancel
+        <button :disabled="submitting" @click="submit">
+          {{ editingSpan ? "Save changes" : "Create span" }}
         </button>
+        <button class="secondary" @click="cancelForm">Cancel</button>
       </div>
       <p v-if="error" class="error-text">{{ error }}</p>
     </div>
@@ -269,7 +346,10 @@ async function removeSpan(id: string) {
       <li v-for="s in spans" :key="s.id">
         <span class="span-type">{{ humanize(s.type) }}</span>
         <span class="span-range">[{{ s.startOffset }}–{{ s.endOffset }}]</span>
-        <button class="link" @click="removeSpan(s.id)">delete</button>
+        <span class="span-actions">
+          <button class="link" @click="startEdit(s)">Edit</button>
+          <button class="link danger" @click="removeSpan(s.id)">Delete</button>
+        </span>
       </li>
     </ul>
   </div>
@@ -330,12 +410,28 @@ input:not([type="checkbox"]) {
   margin-top: 0.7rem;
 }
 
+.span-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.6rem;
+}
+
 button.link {
   border: none;
   background: none;
-  color: var(--color-danger);
-  padding: 0 0.4rem;
+  color: var(--color-ink-muted);
+  padding: 0;
   font-size: 0.8rem;
+  cursor: pointer;
+}
+
+button.link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+button.link.danger:hover {
+  color: var(--color-danger);
 }
 
 .span-list {

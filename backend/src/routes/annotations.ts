@@ -63,7 +63,18 @@ function resolveAttributes(
   return { ...spanInput.attributes, normalizedValue };
 }
 
+const annotationTypeEnum = z.enum([
+  "CRUD",
+  "NUMBER",
+  "FORMATTING_COMMAND",
+  "SPELLED_OUT",
+  "NAMED_ENTITY",
+  "MEDICAL_TERM",
+  "MEASUREMENT",
+]);
+
 const updateSpanSchema = z.object({
+  type: annotationTypeEnum.optional(),
   startOffset: z.number().int().min(0).optional(),
   endOffset: z.number().int().min(0).optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
@@ -90,11 +101,13 @@ annotationsRouter.patch("/spans/:id", async (req, res) => {
     throw new ClientError(offsetError);
   }
 
-  // Same rule as span creation: never trust a client-supplied
-  // normalizedValue for a MEASUREMENT span, recompute it server-side.
+  // A type change ships new attributes matching that type's shape (the
+  // frontend always sends both together), so the *new* type, not the
+  // span's existing one, decides whether MEASUREMENT normalization runs.
+  const effectiveType = updates.type ?? existing.type;
   let attributes = updates.attributes;
   if (
-    existing.type === "MEASUREMENT" &&
+    effectiveType === "MEASUREMENT" &&
     attributes &&
     typeof attributes.value === "number" &&
     typeof attributes.unit === "string"
@@ -109,6 +122,7 @@ annotationsRouter.patch("/spans/:id", async (req, res) => {
   const span = await prisma.annotationSpan.update({
     where: { id },
     data: {
+      type: updates.type,
       startOffset,
       endOffset,
       attributes: attributes

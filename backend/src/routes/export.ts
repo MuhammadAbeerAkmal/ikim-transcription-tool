@@ -37,6 +37,9 @@ exportRouter.get("/export", async (_req, res) => {
         speechRateWpm: item.speechRateOverride ?? item.speechRateComputed,
         distanceEstimateMeters:
           item.distanceEstimateOverride ?? item.distanceEstimateComputed,
+        // Raw bext/LIST INFO chunks read off the WAV file itself, if any
+        // were present (e.g. microphone/device tags from the recorder).
+        metadata: item.audioFile!.metadata,
       },
     };
     return JSON.stringify(line);

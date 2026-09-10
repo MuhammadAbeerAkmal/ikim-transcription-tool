@@ -191,7 +191,7 @@ export function createSpan(
 export function updateSpan(
   id: string,
   updates: Partial<
-    Pick<AnnotationSpan, "startOffset" | "endOffset" | "attributes">
+    Pick<AnnotationSpan, "type" | "startOffset" | "endOffset" | "attributes">
   >,
 ) {
   return request<{ span: AnnotationSpan }>(`/spans/${id}`, {

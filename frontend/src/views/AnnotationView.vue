@@ -181,6 +181,7 @@ function onCorrectedTranscriptChange(value: string) {
 
           <AnnotationPanel
             :item-id="item.id"
+            :corrected-transcript="item.correctedTranscript ?? ''"
             :pending-selection="pendingSelection"
             :spans="item.spans ?? []"
             @spans-changed="load"
