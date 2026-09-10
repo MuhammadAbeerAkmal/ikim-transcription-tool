@@ -65,15 +65,20 @@ describe("normalizeSpokenNumber", () => {
     expect(normalizeSpokenNumber("neunundneunzig")).toEqual({ value: 99, rendering: "words" });
   });
 
-  it("reads a sequence of single-digit words as a digit sequence, distinct from the same-valued cardinal number", () => {
-    // brief's example: "sechs null" means the suture size 6/0, not sixty.
-    // Both produce the numeric value 60, so `rendering` is what actually
-    // distinguishes them. This is the field a consumer must check.
-    const digitSequence = normalizeSpokenNumber("sechs null");
-    const cardinalSixty = normalizeSpokenNumber("sechzig");
-    expect(digitSequence).toEqual({ value: 60, rendering: "digits" });
-    expect(cardinalSixty).toEqual({ value: 60, rendering: "words" });
-    expect(digitSequence?.rendering).not.toBe(cardinalSixty?.rendering);
+  it("parses the brief's own example: sechs null (6/0) is also rendering: words", () => {
+    // The brief's worked example explicitly calls "sechs null" a NUMBER
+    // "spoken as words," meaning 6/0 (a suture size), not the cardinal
+    // number sixty. It's still German words either way, both this and
+    // "sechzig" collapse to the numeric value 60; the schema has no way
+    // to store "6/0" as a distinct value, only the phrases differ.
+    expect(normalizeSpokenNumber("sechs null")).toEqual({
+      value: 60,
+      rendering: "words",
+    });
+    expect(normalizeSpokenNumber("sechzig")).toEqual({
+      value: 60,
+      rendering: "words",
+    });
   });
 
   it("returns null for unparseable input", () => {

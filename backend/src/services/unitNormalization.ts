@@ -113,23 +113,30 @@ function parseGermanNumberWord(word: string): number | null {
 
 export interface SpokenNumberResult {
   value: number;
-  // Mirrors the NUMBER annotation type's own "rendering" attribute
-  // (digits | words) from the brief. Reused here deliberately, since
-  // it's exactly the distinction this function needs to preserve.
-  // A plain `number` return can't tell "sixty" (words) apart from "6/0"
-  // (digits) once both collapse to the value 60. That was a real bug:
-  // the old version claimed to handle this case but silently discarded
-  // the distinction its own docstring said it preserved.
+  // Mirrors the NUMBER annotation type's own "rendering" attribute from
+  // the brief. Both of the brief's own examples resolve to "words" here:
+  // "zwoelf" (one cardinal word -> 12) and "sechs null" (a digit-by-digit
+  // reading -> meaning 6/0, explicitly called "a NUMBER spoken as words"
+  // in the brief's worked example) both name actual German words, so
+  // both are rendering: "words". This function only ever parses spoken
+  // number-words, so it can never itself produce "digits". That value
+  // would describe a transcript where the ASR already wrote literal
+  // numeral characters instead of spelling the number out, a case this
+  // function isn't given (it receives word tokens, not digit glyphs).
   rendering: "digits" | "words";
 }
 
 /**
- * Parses a spoken German number phrase into a digit value plus how it
- * was rendered. Handles standard cardinal numbers ("zwölf" -> 12, words)
- * and digit sequences ("sechs null" -> 60, digits. The brief's own
- * suture-size example, "6/0", not the number sixty). The `rendering`
- * field is what lets a consumer tell those two cases apart; the numeric
- * value alone cannot.
+ * Parses a spoken German number phrase into a numeric value plus how it
+ * was rendered. Handles both a single cardinal word ("zwölf" -> 12) and
+ * a digit-by-digit reading of several single-digit words ("sechs null"
+ * -> the brief's own suture-size example, meaning 6/0). Both cases are
+ * "words" per the brief's worked example; what distinguishes "sechs
+ * null" (6/0) from "sechzig" (60) is that they're different spoken
+ * phrases, not a different `rendering` value, both parse to the numeric
+ * value 60 here, since the NUMBER schema's `normalizedValue` is a plain
+ * number and can't hold a non-numeric code like "6/0" without a schema
+ * change. See DESIGN.md.
  *
  * STATUS: demonstrated-correct and tested, but not yet called from any
  * route or from the frontend's NUMBER annotation form. The annotator
@@ -151,7 +158,7 @@ export function normalizeSpokenNumber(text: string): SpokenNumberResult | null {
 
   const digits = words.map((w) => parseGermanNumberWord(w));
   if (digits.every((d) => d !== null && d >= 0 && d <= 9)) {
-    return { value: Number(digits.join("")), rendering: "digits" };
+    return { value: Number(digits.join("")), rendering: "words" };
   }
 
   return null;

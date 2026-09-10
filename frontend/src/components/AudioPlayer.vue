@@ -33,6 +33,16 @@ function onKeydown(e: KeyboardEvent) {
   }
   if (e.code === "ArrowLeft") skip(-5);
   if (e.code === "ArrowRight") skip(5);
+  if (e.code === "ArrowUp") {
+    e.preventDefault();
+    const next = RATES[RATES.indexOf(playbackRate.value) + 1];
+    if (next !== undefined) setRate(next);
+  }
+  if (e.code === "ArrowDown") {
+    e.preventDefault();
+    const next = RATES[RATES.indexOf(playbackRate.value) - 1];
+    if (next !== undefined) setRate(next);
+  }
 }
 
 function onRateChange(e: Event) {
@@ -75,7 +85,8 @@ function onScrub(e: Event) {
     </div>
 
     <p class="shortcuts">
-      <strong>Shortcuts:</strong> Space = play/pause · ← = back 5s · → = forward 5s
+      <strong>Shortcuts:</strong> Space = play/pause · ← = back 5s · → = forward
+      5s · ↑ = speed up · ↓ = slow down
     </p>
   </div>
 </template>

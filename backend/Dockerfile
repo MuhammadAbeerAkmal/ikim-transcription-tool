@@ -17,6 +17,8 @@ RUN yarn build
 
 EXPOSE 4000
 
-# Applies any pending migrations before the server starts, so a fresh
-# `docker compose up` on an empty database ends up with a ready schema.
-CMD ["sh", "-c", "yarn prisma migrate deploy && yarn start"]
+# Applies any pending migrations, then seeds a few demo items if the
+# database is empty, so a fresh `docker compose up` lands on a queue with
+# working, already-tagged examples instead of nothing. The seed script
+# checks item count itself, so this is a no-op on restarts with real data.
+CMD ["sh", "-c", "yarn prisma migrate deploy && node dist/scripts/seed.js; yarn start"]

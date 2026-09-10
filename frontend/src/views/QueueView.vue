@@ -6,6 +6,7 @@ import {
   exportUrl,
   type QueueItem,
   type ItemStatus,
+  type ItemSort,
 } from "../api/client";
 import { humanize } from "../utils/humanize";
 
@@ -18,9 +19,7 @@ const items = ref<QueueItem[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const statusFilter = ref<ItemStatus | "">("");
-const sort = ref<"duration_asc" | "duration_desc" | "createdAt_desc">(
-  "createdAt_desc",
-);
+const sort = ref<ItemSort>("createdAt_desc");
 
 async function load() {
   loading.value = true;
@@ -83,6 +82,8 @@ async function onDelete(item: QueueItem) {
         <option value="createdAt_desc">Newest first</option>
         <option value="duration_asc">Duration: shortest first</option>
         <option value="duration_desc">Duration: longest first</option>
+        <option value="status_asc">Status: A-Z</option>
+        <option value="status_desc">Status: Z-A</option>
       </select>
       <button class="secondary" @click="load">Refresh</button>
     </div>

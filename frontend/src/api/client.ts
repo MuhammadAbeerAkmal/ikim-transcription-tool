@@ -131,7 +131,17 @@ export function getUnmatchedPairs() {
   }>("/pairing/unmatched");
 }
 
-export function listItems(params: { status?: ItemStatus; sort?: string } = {}) {
+export type ItemSort =
+  | "duration_asc"
+  | "duration_desc"
+  | "createdAt_asc"
+  | "createdAt_desc"
+  | "status_asc"
+  | "status_desc";
+
+export function listItems(
+  params: { status?: ItemStatus; sort?: ItemSort } = {},
+) {
   const query = new URLSearchParams();
   if (params.status) query.set("status", params.status);
   if (params.sort) query.set("sort", params.sort);

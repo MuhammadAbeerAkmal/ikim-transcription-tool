@@ -19,7 +19,14 @@ const statusEnum = z.enum([
 const listQuerySchema = z.object({
   status: statusEnum.optional(),
   sort: z
-    .enum(["duration_asc", "duration_desc", "createdAt_asc", "createdAt_desc"])
+    .enum([
+      "duration_asc",
+      "duration_desc",
+      "createdAt_asc",
+      "createdAt_desc",
+      "status_asc",
+      "status_desc",
+    ])
     .optional(),
 });
 
@@ -39,6 +46,8 @@ itemsRouter.get("/items", async (req, res) => {
     orderBy = { audioFile: { durationSec: "desc" } };
   if (sort === "createdAt_asc") orderBy = { createdAt: "asc" };
   if (sort === "createdAt_desc") orderBy = { createdAt: "desc" };
+  if (sort === "status_asc") orderBy = { status: "asc" };
+  if (sort === "status_desc") orderBy = { status: "desc" };
 
   const items = await prisma.item.findMany({
     where,
