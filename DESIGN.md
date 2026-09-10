@@ -28,6 +28,6 @@ Three tables: `AudioFile`, `Item`, `AnnotationSpan`. `AudioFile` and `Item` are 
 ## What was cut, and what's next
 
 - **`normalizeSpokenNumber`** parses German number words correctly (tested), but isn't wired into the NUMBER form; the annotator still types both fields by hand. Next: a live-parsing text field.
-- **Word-to-audio-time mapping** for click-to-seek evenly distributes words across duration (no per-word timestamps available), an approximation, not real alignment.
-- **File validation is extension-only**, not content-sniffed. Browsers and curl send inconsistent MIME types for identical files, which made MIME validation reject legitimate uploads.
+- **Word-to-audio-time mapping** for click-to-seek evenly distributes words across duration (no per-word timestamps available), an approximation, not real alignment. Next: real per-word timestamps, if a forced-alignment tool were ever in scope.
+- **File validation is extension-only**, not content-sniffed. Browsers and curl send inconsistent MIME types for identical files, which made MIME validation reject legitimate uploads. Next: sniff the file's actual header bytes instead of trusting the extension or a client-sent MIME type.
 - **Demo audio is TTS, not a human recording.** Next: swap in a few real recordings of the same sentences.

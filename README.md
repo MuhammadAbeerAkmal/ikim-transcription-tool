@@ -9,6 +9,8 @@ Built with Node/Express/Prisma/PostgreSQL + Vue 3
 **Prerequisite:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running. Nothing else needs to be installed on the host, Node.js, Yarn, and PostgreSQL all run inside the containers.
 
 ```bash
+git clone https://github.com/MuhammadAbeerAkmal/ikim-transcription-tool.git
+cd ikim-transcription-tool
 docker compose up
 ```
 
